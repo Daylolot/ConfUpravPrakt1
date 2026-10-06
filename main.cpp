@@ -7,6 +7,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include "vfs.h"
 
 struct Config {
     std::string vfs_path;
@@ -51,7 +52,7 @@ bool ParseOptions(int argc, char* argv[], Config& config) {
     return true;
 }
 
-Result Run(const std::string& line, const Config& config) {
+Result Run(const std::string& line, const Config& config, const Vfs& vfs) {
     const auto words = Split(line);
     if (words.empty()) return Result::Continue;
     const std::string& command = words[0];
@@ -62,6 +63,13 @@ Result Run(const std::string& line, const Config& config) {
         if (words.size() != 1) std::cerr << "conf-dump: too many arguments\n";
         else {
             DumpConfig(config);
+            return Result::Continue;
+        }
+    } else if (command == "vfs-dump") {
+        if (words.size() != 1) std::cerr << "vfs-dump: too many arguments\n";
+        else if (!vfs.IsLoaded()) std::cerr << "vfs-dump: no VFS loaded\n";
+        else {
+            vfs.Dump(std::cout);
             return Result::Continue;
         }
     } else if (command == "ls" || command == "cd") {
@@ -85,6 +93,15 @@ int main(int argc, char* argv[]) {
         return 2;
     }
     DumpConfig(config);
+    Vfs vfs;
+    if (!config.vfs_path.empty()) {
+        try {
+            vfs.Load(config.vfs_path);
+        } catch (const std::exception& error) {
+            std::cerr << "vfs: " << error.what() << '\n';
+            return 1;
+        }
+    }
     bool script_failed = false;
     if (!config.script_path.empty()) {
         std::ifstream script(config.script_path);
@@ -99,7 +116,7 @@ int main(int argc, char* argv[]) {
             if (line.find_first_not_of(" \t\r") == std::string::npos ||
                 line.find_first_not_of(" \t\r") == line.find("//")) continue;
             std::cout << Prompt() << line << '\n' << std::flush;
-            Result result = Run(line, config);
+            Result result = Run(line, config, vfs);
             if (result == Result::Error) {
                 std::cerr << "script: " << config.script_path << ':' << number << ": command failed\n";
                 script_failed = true;
@@ -115,7 +132,7 @@ int main(int argc, char* argv[]) {
     while (true) {
         std::cout << Prompt() << std::flush;
         if (!std::getline(std::cin, line)) break;
-        if (Run(line, config) == Result::Exit) break;
+        if (Run(line, config, vfs) == Result::Exit) break;
     }
     return script_failed ? 1 : 0;
 }

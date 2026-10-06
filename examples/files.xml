@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<vfs>
+  <file name="readme.txt">Hello &amp; welcome!</file>
+  <file name="raw.bin" encoding="base64">AAEC/w==</file>
+  <dir name="docs">
+    <file name="notes.txt">First line.</file>
+  </dir>
+</vfs>

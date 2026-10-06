@@ -1,0 +1,10 @@
+// Commands of the emulator; C++ comments are ignored.
+conf-dump
+vfs-dump
+ls
+cd docs
+vfs-dump extra
+bad-command
+ls too many arguments
+exit extra
+exit
