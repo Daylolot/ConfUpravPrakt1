@@ -3,6 +3,7 @@
 #include <cctype>
 #include <fstream>
 #include <iterator>
+#include <sstream>
 #include <stdexcept>
 #include <utility>
 
@@ -174,10 +175,84 @@ void Vfs::Load(const std::string& path) {
     if (input.bad()) throw std::runtime_error("cannot read file: " + path);
     VfsNode next = XmlParser(xml).Parse();
     root_ = std::move(next);
+    cwd_.clear();
     loaded_ = true;
 }
 
 void Vfs::Dump(std::ostream& out) const {
     out << "/\n";
     DumpNode(root_, "/", out);
+}
+
+const VfsNode* Vfs::Resolve(const std::string& path, std::vector<std::string>& names,
+                            std::string& error) const {
+    if (!loaded_) {
+        error = "no VFS loaded";
+        return nullptr;
+    }
+    names = path.empty() || path[0] != '/' ? cwd_ : std::vector<std::string>{};
+    std::vector<const VfsNode*> stack{&root_};
+    for (const auto& name : names) {
+        const VfsNode* next = nullptr;
+        for (const auto& child : stack.back()->children)
+            if (child.name == name) next = &child;
+        stack.push_back(next); // cwd_ всегда указывает на существующую папку.
+    }
+    std::istringstream input(path);
+    std::string part;
+    while (std::getline(input, part, '/')) {
+        if (part.empty()) continue;
+        if (part == "." && stack.back()->directory) continue;
+        if (!stack.back()->directory) {
+            error = "not a directory";
+            return nullptr;
+        }
+        if (part == "..") {
+            if (stack.size() > 1) {
+                stack.pop_back();
+                names.pop_back();
+            }
+            continue;
+        }
+        const VfsNode* next = nullptr;
+        for (const auto& child : stack.back()->children)
+            if (child.name == part) next = &child;
+        if (!next) {
+            error = "no such file or directory";
+            return nullptr;
+        }
+        names.push_back(part);
+        stack.push_back(next);
+    }
+    if (path.size() > 1 && path.back() == '/' && !stack.back()->directory) {
+        error = "not a directory";
+        return nullptr;
+    }
+    return stack.back();
+}
+
+const VfsNode* Vfs::Find(const std::string& path, std::string& error) const {
+    std::vector<std::string> names;
+    return Resolve(path, names, error);
+}
+
+bool Vfs::ChangeDirectory(const std::string& path, std::string& error) {
+    std::vector<std::string> names;
+    const VfsNode* node = Resolve(path, names, error);
+    if (!node) return false;
+    if (!node->directory) {
+        error = "not a directory";
+        return false;
+    }
+    cwd_ = std::move(names);
+    return true;
+}
+
+std::string Vfs::Pwd() const {
+    std::string path = "/";
+    for (const auto& name : cwd_) {
+        if (path != "/") path += '/';
+        path += name;
+    }
+    return path;
 }

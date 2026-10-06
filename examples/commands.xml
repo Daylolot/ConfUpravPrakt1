@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<vfs>
+  <file name="readme.txt">Virtual home</file>
+  <dir name="docs">
+    <file name="repeat.txt">apple
+apple
+banana
+apple
+apple
+</file>
+    <dir name="archive">
+      <file name="old.txt">Old version</file>
+    </dir>
+  </dir>
+</vfs>

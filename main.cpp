@@ -3,6 +3,7 @@
 
 #include <cstdlib>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -31,7 +32,10 @@ std::string HostName() {
     return gethostname(name, sizeof(name)) == 0 ? name : "host";
 }
 
-std::string Prompt() { return UserName() + "@" + HostName() + ":~$ "; }
+std::string Prompt(const Vfs& vfs) {
+    const std::string path = vfs.IsLoaded() && vfs.Pwd() != "/" ? "~" + vfs.Pwd() : "~";
+    return UserName() + "@" + HostName() + ":" + path + "$ ";
+}
 
 std::vector<std::string> Split(const std::string& line) {
     std::istringstream input(line);
@@ -52,7 +56,54 @@ bool ParseOptions(int argc, char* argv[], Config& config) {
     return true;
 }
 
-Result Run(const std::string& line, const Config& config, const Vfs& vfs) {
+Result RunUniq(const std::vector<std::string>& words, const Vfs& vfs) {
+    if (words.size() == 1 || (words.size() == 2 && words[1][0] == '-')) {
+        std::cerr << "uniq: missing file operand\n";
+        return Result::Error;
+    }
+    if (words.size() > 3) {
+        std::cerr << "uniq: too many arguments\n";
+        return Result::Error;
+    }
+    std::string option;
+    std::string path;
+    if (words.size() == 2) path = words[1];
+    else { option = words[1]; path = words[2]; }
+    if (!option.empty() && option != "-c" && option != "-d" && option != "-u") {
+        std::cerr << "uniq: unsupported option: " << option << '\n';
+        return Result::Error;
+    }
+    std::string error;
+    const VfsNode* file = vfs.Find(path, error);
+    if (!file) std::cerr << "uniq: " << path << ": " << error << '\n';
+    else if (file->directory) std::cerr << "uniq: " << path << ": is a directory\n";
+    else if (file->data.find('\0') != std::string::npos)
+        std::cerr << "uniq: " << path << ": binary file\n";
+    else {
+        std::istringstream input(file->data);
+        std::string line, previous;
+        int count = 0;
+        auto print_group = [&] {
+            if (count == 0 || (option == "-d" && count == 1) ||
+                (option == "-u" && count != 1)) return;
+            if (option == "-c") std::cout << std::setw(7) << count << ' ';
+            std::cout << previous << '\n';
+        };
+        while (std::getline(input, line)) {
+            if (count != 0 && line != previous) {
+                print_group();
+                count = 0;
+            }
+            previous = line;
+            ++count;
+        }
+        print_group();
+        return Result::Continue;
+    }
+    return Result::Error;
+}
+
+Result Run(const std::string& line, const Config& config, Vfs& vfs) {
     const auto words = Split(line);
     if (words.empty()) return Result::Continue;
     const std::string& command = words[0];
@@ -72,14 +123,34 @@ Result Run(const std::string& line, const Config& config, const Vfs& vfs) {
             vfs.Dump(std::cout);
             return Result::Continue;
         }
+    } else if (command == "pwd") {
+        if (words.size() != 1) std::cerr << "pwd: too many arguments\n";
+        else if (!vfs.IsLoaded()) std::cerr << "pwd: no VFS loaded\n";
+        else {
+            std::cout << vfs.Pwd() << '\n';
+            return Result::Continue;
+        }
     } else if (command == "ls" || command == "cd") {
         if (words.size() > 2) std::cerr << command << ": too many arguments\n";
         else {
-            std::cout << command;
-            for (size_t i = 1; i < words.size(); ++i) std::cout << " " << words[i];
-            std::cout << '\n';
-            return Result::Continue;
+            const std::string path = words.size() == 2 ? words[1] :
+                                     (command == "cd" ? "/" : ".");
+            std::string error;
+            if (command == "cd") {
+                if (vfs.ChangeDirectory(path, error)) return Result::Continue;
+            } else {
+                const VfsNode* node = vfs.Find(path, error);
+                if (node) {
+                    if (node->directory) {
+                        for (const auto& child : node->children) std::cout << child.name << '\n';
+                    } else std::cout << node->name << '\n';
+                    return Result::Continue;
+                }
+            }
+            std::cerr << command << ": " << path << ": " << error << '\n';
         }
+    } else if (command == "uniq") {
+        return RunUniq(words, vfs);
     } else {
         std::cerr << command << ": command not found\n";
     }
@@ -115,7 +186,7 @@ int main(int argc, char* argv[]) {
             ++number;
             if (line.find_first_not_of(" \t\r") == std::string::npos ||
                 line.find_first_not_of(" \t\r") == line.find("//")) continue;
-            std::cout << Prompt() << line << '\n' << std::flush;
+            std::cout << Prompt(vfs) << line << '\n' << std::flush;
             Result result = Run(line, config, vfs);
             if (result == Result::Error) {
                 std::cerr << "script: " << config.script_path << ':' << number << ": command failed\n";
@@ -130,7 +201,7 @@ int main(int argc, char* argv[]) {
     }
     std::string line;
     while (true) {
-        std::cout << Prompt() << std::flush;
+        std::cout << Prompt(vfs) << std::flush;
         if (!std::getline(std::cin, line)) break;
         if (Run(line, config, vfs) == Result::Exit) break;
     }

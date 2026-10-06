@@ -1,0 +1,32 @@
+// Basic commands and VFS paths.
+conf-dump
+vfs-dump
+pwd
+ls
+ls /docs
+ls /docs/repeat.txt
+cd docs
+pwd
+ls
+uniq repeat.txt
+uniq -c repeat.txt
+uniq -d repeat.txt
+uniq -u repeat.txt
+cd archive
+pwd
+ls ..
+cd ../..
+pwd
+// Deliberate errors: the script reports their line numbers and continues.
+cd /docs/repeat.txt
+ls missing
+uniq missing
+uniq docs
+pwd extra
+uniq -z /docs/repeat.txt
+uniq
+cd missing
+cd /docs
+cd
+pwd
+exit
