@@ -5,7 +5,6 @@
 #include <string>
 #include <vector>
 
-// Дерево существует только в памяти. Для файла data хранит его байты.
 struct VfsNode {
     std::string name;
     bool directory = true;
@@ -21,10 +20,13 @@ public:
     const VfsNode* Find(const std::string& path, std::string& error) const;
     bool ChangeDirectory(const std::string& path, std::string& error);
     std::string Pwd() const;
+    bool Copy(const std::string& source, const std::string& destination,
+              bool recursive, std::string& error);
 
 private:
     const VfsNode* Resolve(const std::string& path, std::vector<std::string>& names,
                            std::string& error) const;
+    VfsNode* MutableAt(const std::vector<std::string>& names);
     VfsNode root_;
     bool loaded_ = false;
     std::vector<std::string> cwd_;

@@ -1,5 +1,6 @@
 #include "vfs.h"
 
+#include <algorithm>
 #include <cctype>
 #include <fstream>
 #include <iterator>
@@ -166,7 +167,7 @@ void DumpNode(const VfsNode& node, const std::string& path, std::ostream& out) {
     }
 }
 
-} // namespace
+}
 
 void Vfs::Load(const std::string& path) {
     std::ifstream input(path, std::ios::binary);
@@ -196,7 +197,7 @@ const VfsNode* Vfs::Resolve(const std::string& path, std::vector<std::string>& n
         const VfsNode* next = nullptr;
         for (const auto& child : stack.back()->children)
             if (child.name == name) next = &child;
-        stack.push_back(next); // cwd_ всегда указывает на существующую папку.
+        stack.push_back(next);
     }
     std::istringstream input(path);
     std::string part;
@@ -255,4 +256,104 @@ std::string Vfs::Pwd() const {
         path += name;
     }
     return path;
+}
+
+VfsNode* Vfs::MutableAt(const std::vector<std::string>& names) {
+    VfsNode* node = &root_;
+    for (const auto& name : names) {
+        for (auto& child : node->children) {
+            if (child.name == name) {
+                node = &child;
+                break;
+            }
+        }
+    }
+    return node;
+}
+
+bool Vfs::Copy(const std::string& source, const std::string& destination,
+               bool recursive, std::string& error) {
+    std::vector<std::string> source_names;
+    const VfsNode* source_node = Resolve(source, source_names, error);
+    if (!source_node) return false;
+    if (source_names.empty()) {
+        error = "cannot copy root directory";
+        return false;
+    }
+    if (source_node->directory && !recursive) {
+        error = "omitting directory (use -r): " + source;
+        return false;
+    }
+    VfsNode copy = *source_node;
+
+    std::vector<std::string> destination_names;
+    std::string destination_error;
+    const VfsNode* existing = Resolve(destination, destination_names, destination_error);
+    std::vector<std::string> parent_names;
+    std::string target_name;
+    if (existing) {
+        if (existing->directory) {
+            parent_names = destination_names;
+            target_name = source_names.back();
+        } else {
+            parent_names = destination_names;
+            target_name = parent_names.back();
+            parent_names.pop_back();
+        }
+    } else {
+        if (destination_error != "no such file or directory") {
+            error = destination_error;
+            return false;
+        }
+        if (destination.empty() || destination.back() == '/') {
+            error = "destination directory does not exist";
+            return false;
+        }
+        const size_t slash = destination.find_last_of('/');
+        target_name = slash == std::string::npos ? destination : destination.substr(slash + 1);
+        if (target_name.empty() || target_name == "." || target_name == ".." ||
+            target_name.find('\\') != std::string::npos) {
+            error = "invalid destination name";
+            return false;
+        }
+        const std::string parent_path = slash == std::string::npos ? "." :
+                                        (slash == 0 ? "/" : destination.substr(0, slash));
+        std::string parent_error;
+        const VfsNode* parent = Resolve(parent_path, parent_names, parent_error);
+        if (!parent) {
+            error = parent_error;
+            return false;
+        }
+        if (!parent->directory) {
+            error = "not a directory";
+            return false;
+        }
+    }
+
+    std::vector<std::string> target_names = parent_names;
+    target_names.push_back(target_name);
+    if (target_names == source_names) {
+        error = "source and destination are the same file";
+        return false;
+    }
+    if (copy.directory && parent_names.size() >= source_names.size() &&
+        std::equal(source_names.begin(), source_names.end(), parent_names.begin())) {
+        error = "cannot copy a directory into itself";
+        return false;
+    }
+
+    VfsNode* parent = MutableAt(parent_names);
+    for (auto& child : parent->children) {
+        if (child.name != target_name) continue;
+        if (copy.directory || child.directory) {
+            error = "destination already exists as a directory";
+            return false;
+        }
+        copy.name = target_name;
+        child = std::move(copy);
+        return true;
+    }
+    copy.name = target_name;
+    parent->children.push_back(std::move(copy));
+    return true;
 }

@@ -151,6 +151,19 @@ Result Run(const std::string& line, const Config& config, Vfs& vfs) {
         }
     } else if (command == "uniq") {
         return RunUniq(words, vfs);
+    } else if (command == "cp") {
+        const bool recursive = words.size() > 1 && words[1] == "-r";
+        if (words.size() > 1 && !words[1].empty() && words[1][0] == '-' && !recursive)
+            std::cerr << "cp: unsupported option: " << words[1] << '\n';
+        else if (words.size() < (recursive ? 4u : 3u)) std::cerr << "cp: missing source or destination\n";
+        else if (words.size() > (recursive ? 4u : 3u)) std::cerr << "cp: too many arguments\n";
+        else {
+            std::string error;
+            const size_t offset = recursive ? 2 : 1;
+            if (vfs.Copy(words[offset], words[offset + 1], recursive, error))
+                return Result::Continue;
+            std::cerr << "cp: " << error << '\n';
+        }
     } else {
         std::cerr << command << ": command not found\n";
     }

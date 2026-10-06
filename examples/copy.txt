@@ -1,0 +1,23 @@
+// Stage 5: copy a file, copy into a directory, overwrite a file.
+cp /docs/repeat.txt /docs/backup.txt
+uniq -c /docs/backup.txt
+cp /docs/repeat.txt /docs/archive
+ls /docs/archive
+cp /docs/backup.txt /readme.txt
+uniq -u /readme.txt
+// Recursive copies of directories.
+cp -r /docs /docs_copy
+ls /docs_copy
+cp -r /docs/archive /
+ls /archive
+vfs-dump
+// Deliberate errors: no -r, missing path, same file, copy into self, syntax.
+cp /docs /another
+cp /missing /new
+cp /docs/repeat.txt /docs/repeat.txt
+cp -r /docs /docs/archive
+cp /docs/repeat.txt /missing/new
+cp -r / /
+cp -x /readme.txt /new.txt
+cp /readme.txt
+exit
