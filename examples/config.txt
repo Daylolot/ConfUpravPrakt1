@@ -1,0 +1,9 @@
+// The script syntax uses C++ line comments.
+conf-dump
+ls
+cd docs
+bad-command
+ls too many arguments
+conf-dump extra
+exit extra
+exit
