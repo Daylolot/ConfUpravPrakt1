@@ -2,6 +2,9 @@
 
 macOS, `g++` (C++17), `make`:
 
+Исходный код находится в `src/`: `main.cpp` — команды и цикл ввода,
+`vfs.h` и `vfs.cpp` — виртуальная файловая система. Примеры — в `examples/`.
+
 ```bash
 make
 ./emulator --vfs examples/deep.xml --script examples/vfs.txt
