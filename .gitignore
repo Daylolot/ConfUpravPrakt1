@@ -1,1 +1,3 @@
 /emulator
+__pycache__/
+*.pyc
